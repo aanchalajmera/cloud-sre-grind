@@ -86,20 +86,21 @@ def main():
     print("="*40)
     conn = connect_db()
     setup_table(conn)
-    for beacon in BEACONS:
+    
+    import random
+    iteration = 0
+    while True:
+        iteration += 1
+        # Simulate realistic beacon with occasional anomalies
+        beacon = {
+            "battery_voltage": round(random.uniform(5.5, 8.4), 2),
+            "temperature": round(random.uniform(15.0, 45.0), 2),
+            "rssi": round(random.uniform(-105, -75), 2),
+            "solar_current": round(random.uniform(0.0, 2.0), 2),
+        }
         insert_beacon(conn, beacon)
-    print("\nAll beacons stored in database")
-    
-    # Read back from DB to confirm
-    with conn.cursor() as cur:
-        cur.execute("SELECT timestamp, battery_voltage, temperature, status FROM telemetry ORDER BY timestamp")
-        rows = cur.fetchall()
-        print("\nStored telemetry:")
-        for row in rows:
-            print(f"  {row[0]} | {row[1]}V | {row[2]}C | {row[3]}")
-    
-    conn.close()
+        print(f"Beacon #{iteration} stored")
+        time.sleep(5)
 
 if __name__ == "__main__":
     main()
-

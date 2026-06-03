@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=telemetry
+      - POSTGRES_USER=parikshit
+      - POSTGRES_PASSWORD=satellite123
+    volumes:
+      - telemetry_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  parser:
+    build: ./app
+    depends_on:
+      - db
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=telemetry
+      - DB_USER=parikshit
+      - DB_PASSWORD=satellite123
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=parikshit123
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - db
+
+volumes:
+  telemetry_data:
+  grafana_data:
