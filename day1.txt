@@ -1,3 +1,4 @@
 day 1 -linux basics
 learned: navigation, processes, scripting, permissions
 
+day 2: processes, file search, networking, cron jobs
