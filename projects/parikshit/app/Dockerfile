@@ -4,6 +4,6 @@ WORKDIR /app
 
 COPY . .
 
-RUN pip install --no-cache-dir pandas
+RUN pip install --no-cache-dir psycopg2-binary
 
 CMD ["python3", "parser.py"]

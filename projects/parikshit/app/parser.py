@@ -1,0 +1,105 @@
+import os
+import time
+import psycopg2
+from datetime import datetime
+
+# Database connection from environment variables
+DB_CONFIG = {
+    "host": os.getenv("DB_HOST", "localhost"),
+    "port": os.getenv("DB_PORT", 5432),
+    "dbname": os.getenv("DB_NAME", "telemetry"),
+    "user": os.getenv("DB_USER", "parikshit"),
+    "password": os.getenv("DB_PASSWORD", "satellite123")
+}
+
+# Health thresholds
+THRESHOLDS = {
+    "battery_voltage": {"min": 6.5, "max": 8.4},
+    "temperature":     {"min": -10, "max": 40},
+    "rssi":            {"min": -100, "max": 0},
+    "solar_current":   {"min": 0.2,  "max": 2.0},
+}
+
+# Simulated beacon data
+BEACONS = [
+    {"battery_voltage": 7.8, "temperature": 22.1, "rssi": -85, "solar_current": 1.2},
+    {"battery_voltage": 7.6, "temperature": 23.4, "rssi": -88, "solar_current": 1.1},
+    {"battery_voltage": 6.2, "temperature": 38.5, "rssi": -95, "solar_current": 0.3},
+    {"battery_voltage": 7.9, "temperature": 21.0, "rssi": -82, "solar_current": 1.4},
+    {"battery_voltage": 5.8, "temperature": 42.0, "rssi": -101, "solar_current": 0.1},
+]
+
+def connect_db():
+    print("Connecting to database...")
+    for i in range(10):
+        try:
+            conn = psycopg2.connect(**DB_CONFIG)
+            print("Connected successfully")
+            return conn
+        except Exception as e:
+            print(f"Attempt {i+1}/10 failed: {e}")
+            time.sleep(3)
+    raise Exception("Could not connect to database")
+
+def setup_table(conn):
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS telemetry (
+                id SERIAL PRIMARY KEY,
+                timestamp TIMESTAMPTZ DEFAULT NOW(),
+                battery_voltage FLOAT,
+                temperature FLOAT,
+                rssi FLOAT,
+                solar_current FLOAT,
+                status VARCHAR(20)
+            )
+        """)
+        conn.commit()
+    print("Table ready")
+
+def check_health(beacon):
+    for key, val in beacon.items():
+        t = THRESHOLDS[key]
+        if val < t["min"] or val > t["max"]:
+            return "ANOMALY"
+    return "NOMINAL"
+
+def insert_beacon(conn, beacon):
+    status = check_health(beacon)
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO telemetry 
+            (battery_voltage, temperature, rssi, solar_current, status)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (
+            beacon["battery_voltage"],
+            beacon["temperature"],
+            beacon["rssi"],
+            beacon["solar_current"],
+            status
+        ))
+        conn.commit()
+    print(f"Inserted beacon → {status} | battery={beacon['battery_voltage']}V temp={beacon['temperature']}C")
+
+def main():
+    print("PARIKSHIT-1 TELEMETRY PARSER")
+    print("="*40)
+    conn = connect_db()
+    setup_table(conn)
+    for beacon in BEACONS:
+        insert_beacon(conn, beacon)
+    print("\nAll beacons stored in database")
+    
+    # Read back from DB to confirm
+    with conn.cursor() as cur:
+        cur.execute("SELECT timestamp, battery_voltage, temperature, status FROM telemetry ORDER BY timestamp")
+        rows = cur.fetchall()
+        print("\nStored telemetry:")
+        for row in rows:
+            print(f"  {row[0]} | {row[1]}V | {row[2]}C | {row[3]}")
+    
+    conn.close()
+
+if __name__ == "__main__":
+    main()
+
