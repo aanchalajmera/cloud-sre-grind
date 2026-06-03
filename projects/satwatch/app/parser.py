@@ -1,9 +1,18 @@
 import os
 import time
 import psycopg2
-from datetime import datetime
+import random
+from prometheus_client import start_http_server, Gauge, Counter
 
-# Database connection from environment variables
+# Prometheus metrics
+battery_gauge = Gauge('satwatch_battery_voltage', 'Battery voltage in volts')
+temp_gauge = Gauge('satwatch_temperature', 'Temperature in celsius')
+rssi_gauge = Gauge('satwatch_rssi', 'Signal strength in dBm')
+solar_gauge = Gauge('satwatch_solar_current', 'Solar current in amps')
+anomaly_counter = Counter('satwatch_anomalies_total', 'Total anomalies detected')
+beacon_counter = Counter('satwatch_beacons_total', 'Total beacons processed')
+
+# Database config
 DB_CONFIG = {
     "host": os.getenv("DB_HOST", "localhost"),
     "port": os.getenv("DB_PORT", 5432),
@@ -12,22 +21,12 @@ DB_CONFIG = {
     "password": os.getenv("DB_PASSWORD", "satellite123")
 }
 
-# Health thresholds
 THRESHOLDS = {
     "battery_voltage": {"min": 6.5, "max": 8.4},
     "temperature":     {"min": -10, "max": 40},
     "rssi":            {"min": -100, "max": 0},
     "solar_current":   {"min": 0.2,  "max": 2.0},
 }
-
-# Simulated beacon data
-BEACONS = [
-    {"battery_voltage": 7.8, "temperature": 22.1, "rssi": -85, "solar_current": 1.2},
-    {"battery_voltage": 7.6, "temperature": 23.4, "rssi": -88, "solar_current": 1.1},
-    {"battery_voltage": 6.2, "temperature": 38.5, "rssi": -95, "solar_current": 0.3},
-    {"battery_voltage": 7.9, "temperature": 21.0, "rssi": -82, "solar_current": 1.4},
-    {"battery_voltage": 5.8, "temperature": 42.0, "rssi": -101, "solar_current": 0.1},
-]
 
 def connect_db():
     print("Connecting to database...")
@@ -79,19 +78,32 @@ def insert_beacon(conn, beacon):
             status
         ))
         conn.commit()
-    print(f"Inserted beacon → {status} | battery={beacon['battery_voltage']}V temp={beacon['temperature']}C")
+
+    # Update Prometheus metrics
+    battery_gauge.set(beacon["battery_voltage"])
+    temp_gauge.set(beacon["temperature"])
+    rssi_gauge.set(beacon["rssi"])
+    solar_gauge.set(beacon["solar_current"])
+    beacon_counter.inc()
+    
+    if status == "ANOMALY":
+        anomaly_counter.inc()
+    
+    print(f"Beacon stored → {status} | battery={beacon['battery_voltage']}V temp={beacon['temperature']}C")
 
 def main():
-    print("PARIKSHIT-1 TELEMETRY PARSER")
+    # Start Prometheus metrics server
+    start_http_server(8000)
+    print("Prometheus metrics server started on port 8000")
+    
+    print("SATWATCH TELEMETRY PARSER")
     print("="*40)
     conn = connect_db()
     setup_table(conn)
     
-    import random
     iteration = 0
     while True:
         iteration += 1
-        # Simulate realistic beacon with occasional anomalies
         beacon = {
             "battery_voltage": round(random.uniform(5.5, 8.4), 2),
             "temperature": round(random.uniform(15.0, 45.0), 2),
@@ -99,7 +111,6 @@ def main():
             "solar_current": round(random.uniform(0.0, 2.0), 2),
         }
         insert_beacon(conn, beacon)
-        print(f"Beacon #{iteration} stored")
         time.sleep(5)
 
 if __name__ == "__main__":
